@@ -54,3 +54,15 @@ data "aws_ami" "amazon_linux_2023" {
     values = ["hvm"]
   }
 }
+
+variable "key_pair_name" {
+  description = "key-pair name"
+  type        = string
+  default     = "demo-key-pair"
+}
+
+variable "file_name" {
+  description = "Private key local storage"
+  type        = string
+  default = "private_key.pem"
+}

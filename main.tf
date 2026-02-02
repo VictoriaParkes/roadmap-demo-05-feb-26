@@ -23,7 +23,7 @@ resource "aws_security_group" "alb_sg" {
   vpc_id      = module.vpc.vpc_id
 
   tags = {
-    Name = "load-balancer-SG"
+    Name = "load-balancer-security-group"
   }
 }
 
@@ -49,7 +49,7 @@ resource "aws_security_group" "instance_sg" {
   vpc_id      = module.vpc.vpc_id
 
   tags = {
-    Name = "instance-SG"
+    Name = "instance-security-group"
   }
 }
 
@@ -62,6 +62,15 @@ resource "aws_vpc_security_group_ingress_rule" "instance_ingress_rule" {
   to_port                      = 80
 }
 
+resource "aws_vpc_security_group_ingress_rule" "instance_ingress_rule_ssh" {
+  security_group_id = aws_security_group.instance_sg.id
+
+  prefix_list_id = var.prefix_list_id
+  from_port                    = 22
+  ip_protocol                  = "tcp"
+  to_port                      = 22
+}
+
 resource "aws_vpc_security_group_egress_rule" "instance_egress_rule" {
   security_group_id = aws_security_group.instance_sg.id
 
@@ -69,32 +78,27 @@ resource "aws_vpc_security_group_egress_rule" "instance_egress_rule" {
   ip_protocol = "-1"
 }
 
-# resource "aws_instance" "web_server_instance" {
-#   count                  = length(module.vpc.private_subnets)
-#   subnet_id              = module.vpc.private_subnets[count.index]
-#   ami                    = data.aws_ami.amazon_linux_2023.id
-#   instance_type          = "t3.micro"
-#   vpc_security_group_ids = [aws_security_group.instance_sg.id]
+resource "aws_key_pair" "demo_key_pair" {
+  key_name   = var.key_pair_name
+  public_key = tls_private_key.rsa-4096-example.public_key_openssh
+}
 
-#   user_data_base64 = base64encode(<<-EOF
-#     #!/bin/bash
-#     dnf update -y
-#     dnf install -y nginx
-#     systemctl start nginx
-#     systemctl enable nginx
-#     echo "<html><h1>Server ${count.index + 1}</h1></html>" > /usr/share/nginx/html/index.html
-#   EOF
-#   )
+# RSA key of size 4096 bits
+resource "tls_private_key" "rsa-4096-example" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
 
-#   tags = {
-#     Name = "web-server ${count.index + 1}"
-#   }
-# }
+resource "local_file" "demo_key" {
+  content  = tls_private_key.rsa-4096-example.private_key_pem
+  filename = var.file_name
+}
 
 resource "aws_launch_template" "web_server" {
   name_prefix   = "web-server-"
   image_id      = data.aws_ami.amazon_linux_2023.id
   instance_type = "t3.micro"
+  key_name = aws_key_pair.demo_key_pair.key_name
 
   vpc_security_group_ids = [aws_security_group.instance_sg.id]
 
@@ -141,13 +145,6 @@ resource "aws_lb_target_group" "alb_target_group" {
   }
 }
 
-# resource "aws_lb_target_group_attachment" "alb_target_group_attachment" {
-#   count            = length(aws_instance.web_server_instance)
-#   target_group_arn = aws_lb_target_group.alb_target_group.arn
-#   target_id        = aws_instance.web_server_instance[count.index].id
-#   port             = 80
-# }
-
 resource "aws_lb_listener" "alb_listener" {
   load_balancer_arn = aws_lb.load_balancer.arn
   port              = 80
@@ -181,7 +178,7 @@ resource "aws_autoscaling_group" "web_server_asg" {
 
   tag {
     key                 = "Name"
-    value               = "web-server-asg"
+    value               = "web-server"
     propagate_at_launch = true
   }
 }
