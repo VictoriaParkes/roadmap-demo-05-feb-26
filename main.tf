@@ -237,3 +237,41 @@ resource "aws_autoscaling_policy" "scale_down" {
   scaling_adjustment     = -1
   cooldown               = 300
 }
+
+resource "aws_cloudwatch_metric_alarm" "high_cpu" {
+  alarm_name                = "web-server-high-cpu"
+  alarm_description         = "This metric monitors for high ec2 cpu utilization"
+  comparison_operator       = "GreaterThanThreshold"
+  evaluation_periods        = 2
+  metric_name               = "CPUUtilization"
+  namespace                 = "AWS/EC2"
+  period                    = 60
+  statistic                 = "Average"
+  threshold                 = 70
+  insufficient_data_actions = []
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.web_server_asg.name
+  }
+
+  alarm_actions = [aws_autoscaling_policy.scale_up.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "low_cpu" {
+  alarm_name                = "web-server-low-cpu"
+  alarm_description         = "This metric monitors for low ec2 cpu utilization"
+  comparison_operator       = "LessThanThreshold"
+  evaluation_periods        = 2
+  metric_name               = "CPUUtilization"
+  namespace                 = "AWS/EC2"
+  period                    = 60
+  statistic                 = "Average"
+  threshold                 = 30
+  insufficient_data_actions = []
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.web_server_asg.name
+  }
+
+  alarm_actions = [aws_autoscaling_policy.scale_down.arn]
+}
