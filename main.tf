@@ -69,26 +69,44 @@ resource "aws_vpc_security_group_egress_rule" "instance_egress_rule" {
   ip_protocol = "-1"
 }
 
-resource "aws_instance" "web_server_instance" {
-  count                  = length(module.vpc.private_subnets)
-  subnet_id              = module.vpc.private_subnets[count.index]
-  ami                    = data.aws_ami.amazon_linux_2023.id
-  instance_type          = "t3.micro"
+# resource "aws_instance" "web_server_instance" {
+#   count                  = length(module.vpc.private_subnets)
+#   subnet_id              = module.vpc.private_subnets[count.index]
+#   ami                    = data.aws_ami.amazon_linux_2023.id
+#   instance_type          = "t3.micro"
+#   vpc_security_group_ids = [aws_security_group.instance_sg.id]
+
+#   user_data_base64 = base64encode(<<-EOF
+#     #!/bin/bash
+#     dnf update -y
+#     dnf install -y nginx
+#     systemctl start nginx
+#     systemctl enable nginx
+#     echo "<html><h1>Server ${count.index + 1}</h1></html>" > /usr/share/nginx/html/index.html
+#   EOF
+#   )
+
+#   tags = {
+#     Name = "web-server ${count.index + 1}"
+#   }
+# }
+
+resource "aws_launch_template" "web_server" {
+  name_prefix   = "web-server-"
+  image_id      = data.aws_ami.amazon_linux_2023.id
+  instance_type = "t3.micro"
+
   vpc_security_group_ids = [aws_security_group.instance_sg.id]
 
-  user_data_base64 = base64encode(<<-EOF
+  user_data = base64encode(<<-EOF
     #!/bin/bash
     dnf update -y
     dnf install -y nginx
     systemctl start nginx
     systemctl enable nginx
-    echo "<html><h1>Server ${count.index + 1}</h1></html>" > /usr/share/nginx/html/index.html
+    echo "<html><h1>Server $(hostname)</h1></html>" > /usr/share/nginx/html/index.html
   EOF
   )
-
-  tags = {
-    Name = "web-server ${count.index + 1}"
-  }
 }
 
 resource "aws_lb" "load_balancer" {
@@ -123,12 +141,12 @@ resource "aws_lb_target_group" "alb_target_group" {
   }
 }
 
-resource "aws_lb_target_group_attachment" "alb_target_group_attachment" {
-  count            = length(aws_instance.web_server_instance)
-  target_group_arn = aws_lb_target_group.alb_target_group.arn
-  target_id        = aws_instance.web_server_instance[count.index].id
-  port             = 80
-}
+# resource "aws_lb_target_group_attachment" "alb_target_group_attachment" {
+#   count            = length(aws_instance.web_server_instance)
+#   target_group_arn = aws_lb_target_group.alb_target_group.arn
+#   target_id        = aws_instance.web_server_instance[count.index].id
+#   port             = 80
+# }
 
 resource "aws_lb_listener" "alb_listener" {
   load_balancer_arn = aws_lb.load_balancer.arn
@@ -144,4 +162,42 @@ resource "aws_lb_listener" "alb_listener" {
       }
     }
   }
+}
+
+resource "aws_autoscaling_group" "web_server_asg" {
+  name                = "web-server-asg"
+  vpc_zone_identifier = module.vpc.private_subnets
+  target_group_arns   = [aws_lb_target_group.alb_target_group.arn]
+  health_check_type   = "ELB"
+  
+  min_size         = 2
+  max_size         = 6
+  desired_capacity = 3
+
+  launch_template {
+    id      = aws_launch_template.web_server.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "web-server-asg"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_policy" "scale_up" {
+  name                   = "scale-up"
+  autoscaling_group_name = aws_autoscaling_group.web_server_asg.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = 1
+  cooldown               = 300
+}
+
+resource "aws_autoscaling_policy" "scale_down" {
+  name                   = "scale-down"
+  autoscaling_group_name = aws_autoscaling_group.web_server_asg.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = -1
+  cooldown               = 300
 }
