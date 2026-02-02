@@ -64,5 +64,5 @@ variable "key_pair_name" {
 variable "file_name" {
   description = "Private key local storage"
   type        = string
-  default = "private_key.pem"
+  default     = "private_key.pem"
 }

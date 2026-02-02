@@ -43,6 +43,32 @@ resource "aws_vpc_security_group_egress_rule" "preffix_egress_rule" {
   ip_protocol = "-1"
 }
 
+resource "aws_security_group" "bastion_sg" {
+  name        = "bastion-security-group"
+  description = "Allow SSH from prefix list"
+  vpc_id      = module.vpc.vpc_id
+
+  tags = {
+    Name = "bastion-security-group"
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "bastion_ingress_rule" {
+  security_group_id = aws_security_group.bastion_sg.id
+
+  prefix_list_id = var.prefix_list_id
+  from_port      = 22
+  ip_protocol    = "tcp"
+  to_port        = 22
+}
+
+resource "aws_vpc_security_group_egress_rule" "bastion_egress_rule" {
+  security_group_id = aws_security_group.bastion_sg.id
+
+  cidr_ipv4   = "0.0.0.0/0"
+  ip_protocol = "-1"
+}
+
 resource "aws_security_group" "instance_sg" {
   name        = "instance-security-group"
   description = "Allow traffic from load balancer security group to instances"
@@ -65,7 +91,7 @@ resource "aws_vpc_security_group_ingress_rule" "instance_ingress_rule" {
 resource "aws_vpc_security_group_ingress_rule" "instance_ingress_rule_ssh" {
   security_group_id = aws_security_group.instance_sg.id
 
-  prefix_list_id = var.prefix_list_id
+  referenced_security_group_id = aws_security_group.bastion_sg.id
   from_port                    = 22
   ip_protocol                  = "tcp"
   to_port                      = 22
@@ -76,6 +102,19 @@ resource "aws_vpc_security_group_egress_rule" "instance_egress_rule" {
 
   cidr_ipv4   = "0.0.0.0/0"
   ip_protocol = "-1"
+}
+
+resource "aws_instance" "bastion" {
+  ami                         = data.aws_ami.amazon_linux_2023.id
+  instance_type               = "t3.micro"
+  key_name                    = aws_key_pair.demo_key_pair.key_name
+  subnet_id                   = module.vpc.public_subnets[0]
+  vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
+  associate_public_ip_address = true
+
+  tags = {
+    Name = "bastion-host"
+  }
 }
 
 resource "aws_key_pair" "demo_key_pair" {
@@ -98,7 +137,7 @@ resource "aws_launch_template" "web_server" {
   name_prefix   = "web-server-"
   image_id      = data.aws_ami.amazon_linux_2023.id
   instance_type = "t3.micro"
-  key_name = aws_key_pair.demo_key_pair.key_name
+  key_name      = aws_key_pair.demo_key_pair.key_name
 
   vpc_security_group_ids = [aws_security_group.instance_sg.id]
 
@@ -166,7 +205,7 @@ resource "aws_autoscaling_group" "web_server_asg" {
   vpc_zone_identifier = module.vpc.private_subnets
   target_group_arns   = [aws_lb_target_group.alb_target_group.arn]
   health_check_type   = "ELB"
-  
+
   min_size         = 2
   max_size         = 6
   desired_capacity = 3
