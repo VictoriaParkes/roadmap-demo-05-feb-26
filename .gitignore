@@ -1,0 +1,42 @@
+# Python environment configuration file that may contain sensitive settings
+env.py
+# Environment variables file containing secrets like API keys and passwords
+.env
+# Database files (SQLite, etc.) that are typically generated locally
+*.db
+# Python's compiled bytecode cache directory
+__pycache__
+# macOS system file that stores folder display preferences
+.DS_Store
+
+# Local .terraform directories
+# Large files : Contains downloaded provider binaries (hundreds of MB)
+# Platform-specific : Binaries are OS/architecture specific
+# Regeneratable : terraform init recreates it from .terraform.lock.hcl
+# No secrets : Just cached provider plugins and modules
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# Crash log files
+crash.log
+
+# Exclude all .tfvars files, which are likely to contain sentitive data, such as
+# password, private keys, and other secrets. These should not be part of version
+# control as they are data points which are potentially sensitive and subject
+# to change depending on the environment.
+*.tfvars
+
+# Ignore override files as they are usually used to override resources locally and so
+# are not checked in
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
