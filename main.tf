@@ -218,6 +218,9 @@ resource "aws_launch_template" "web_server" {
     systemctl enable nginx
     echo "<html><h1>Server $(hostname)</h1></html>" > /usr/share/nginx/html/index.html
 
+    # To synchronize all instances, use time-based alignment so they all start their
+    # CPU cycles at the same clock time:
+
     # Synchronized CPU cycling script
     cat > /usr/local/bin/cpu-cycle.sh << 'SCRIPT'
     #!/bin/bash
@@ -237,6 +240,10 @@ resource "aws_launch_template" "web_server" {
       sleep 180
     done
     SCRIPT
+
+    # This synchronizes all instances to start high CPU at the same time
+    # (every 6 minutes: XX:00, XX:06, XX:12, etc.), making the aggregate
+    # CPU spike uniform across the ASG.
     
     chmod +x /usr/local/bin/cpu-cycle.sh
     nohup /usr/local/bin/cpu-cycle.sh > /var/log/cpu-cycle.log 2>&1 &
