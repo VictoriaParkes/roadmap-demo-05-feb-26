@@ -15,13 +15,30 @@ output "asg_instance_private_ips" {
   value       = data.aws_instances.asg_instances.private_ips
 }
 
-output "ssh_command_template" {
-  description = "SSH command template"
-  value       = "ssh -A -i ${var.file_name} -J ec2-user@${aws_instance.bastion.public_ip} ec2-user@<INSTANCE_PRIVATE_IP>"
+output "name" {
+  
 }
+
+# output "ssh_command_template" {
+#   description = "SSH command template"
+#   value       = "ssh -A -i ${var.file_name} -J ec2-user@${aws_instance.bastion.public_ip} ec2-user@<INSTANCE_PRIVATE_IP>"
+# }
 
 
 # output "ssh_access" {
 #   description = "BASH command for SSH access"
 #   value = "ssh -A -i ${var.file_name} -J ec2-user@${aws_instance.bastion.public_ip} ec2-user@${data.aws_instances.asg_instances.private_ips[0]}"
+# }
+
+# # Output public key (safe to display)
+# output "public_key_openshh" {
+#   description = "Public key in OpenSSH format"
+#   value       = tls_private_key.rsa-4096-example.public_key_openssh
+# }
+
+# # Output private key (sensitive)
+# output "private_key_pem" {
+#   description = "Private key in PEM format"
+#   value       = tls_private_key.rsa-4096-example.private_key_pem
+#   sensitive   = true
 # }
