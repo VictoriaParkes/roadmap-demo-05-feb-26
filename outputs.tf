@@ -15,9 +15,11 @@ output "asg_instance_private_ips" {
   value       = data.aws_instances.asg_instances.private_ips
 }
 
-output "name" {
-  
+output "load_balancer_dns" {
+  description = "DNS name of the load balancer"
+  value       = "HTTP://${aws_lb.load_balancer.dns_name}"
 }
+
 
 # output "ssh_command_template" {
 #   description = "SSH command template"
