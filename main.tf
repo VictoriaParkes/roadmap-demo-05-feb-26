@@ -406,7 +406,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   namespace                 = "AWS/EC2" # Uses EC2 metrics from CloudWatch
   period                    = 60 # Checks CPU every 60 seconds
   statistic                 = "Average" # Calculates average CPU across all instances
-  threshold                 = 70 # Alarm triggers when average CPU > 70%
+  threshold                 = 50 # Alarm triggers when average CPU > 50%
   insufficient_data_actions = []
 
   dimensions = {
