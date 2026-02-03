@@ -401,7 +401,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name                = "web-server-high-cpu"
   alarm_description         = "This metric monitors for high ec2 cpu utilization"
   comparison_operator       = "GreaterThanThreshold" # Triggers when CPU exceeds threshold
-  evaluation_periods        = 2 # Must exceed threshold for 2 consecutive periods (2 minutes total)
+  evaluation_periods        = 1 # Must exceed threshold for x num consecutive periods
   metric_name               = "CPUUtilization" # Monitors CPU percentage
   namespace                 = "AWS/EC2" # Uses EC2 metrics from CloudWatch
   period                    = 60 # Checks CPU every 60 seconds
@@ -433,7 +433,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   alarm_name                = "web-server-low-cpu"
   alarm_description         = "This metric monitors for low ec2 cpu utilization"
   comparison_operator       = "LessThanThreshold"
-  evaluation_periods        = 2
+  evaluation_periods        = 1
   metric_name               = "CPUUtilization"
   namespace                 = "AWS/EC2"
   period                    = 60
