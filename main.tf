@@ -251,6 +251,8 @@ resource "aws_launch_template" "web_server" {
   )
 }
 
+/* Create an Application Load Balancer (ALB) that distributes incoming HTTP
+traffic across your web server instances. */
 resource "aws_lb" "load_balancer" {
   load_balancer_type = "application"
   name               = "load-balancer"
@@ -264,6 +266,8 @@ resource "aws_lb" "load_balancer" {
   }
 }
 
+/* Create This code creates a target group that defines where the load balancer
+should send traffic and how to check if those targets are healthy. */
 resource "aws_lb_target_group" "alb_target_group" {
   name     = "instance-target-group"
   port     = 80
@@ -272,37 +276,56 @@ resource "aws_lb_target_group" "alb_target_group" {
 
   health_check {
     enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/"
+    healthy_threshold   = 2 # Instance becomes healthy after 2 consecutive successful checks (60 seconds)
+    interval            = 30 # Checks every 30 seconds
+    matcher             = "200" # Expects HTTP 200 status code for healthy response
+    path                = "/" # ALB sends HTTP GET requests to the root path
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 5 # Waits 5 seconds for a response before considering it failed
+    unhealthy_threshold = 2 # Instance becomes unhealthy after 2 consecutive failed checks (60 seconds)
   }
 }
+/* How it works:
+ - Auto Scaling Group automatically registers new instances to this target group
+ - ALB continuously checks each instance's health by requesting http://instance-ip/
+ - Only healthy instances receive traffic from the ALB
+ - If an instance fails 2 checks, ALB stops sending it traffic until it passes 2 checks again
+ - This ensures users only reach working instances.
+*/
 
+/* Create a listener for the ALB that forwards HTTP traffic (port 80) to the
+target group, which contains your web server instances. */
 resource "aws_lb_listener" "alb_listener" {
-  load_balancer_arn = aws_lb.load_balancer.arn
-  port              = 80
+  load_balancer_arn = aws_lb.load_balancer.arn # Attaches this listener to your load balancer
+  port              = 80 # Listens for incoming HTTP traffic on port 80
   protocol          = "HTTP"
 
   default_action {
-    type = "forward"
+    type = "forward" # Forwards all incoming requests to the target group
 
     forward {
       target_group {
-        arn = aws_lb_target_group.alb_target_group.arn
+        arn = aws_lb_target_group.alb_target_group.arn # Specifies which target group receives the traffic
       }
     }
   }
 }
 
+/* Create an Auto Scaling Group (ASG) that maintains a specified number of web
+server instances (3) in the private subnets, using the launch template defined
+above. The ASG automatically registers instances with the ALB's target group
+and handles scaling based on CloudWatch alarms. */
+
+/* Auto Scaling Group (ASG) that automatically manages the number of EC2
+instances based on demand. */
 resource "aws_autoscaling_group" "web_server_asg" {
   name                = "web-server-asg"
+  # Launch instances in private subnets across multiple availability zones
   vpc_zone_identifier = module.vpc.private_subnets
+  #v Automatically register new instances with the load balancer's target group
   target_group_arns   = [aws_lb_target_group.alb_target_group.arn]
+  # Use load balancer health checks (not just EC2 status checks) to determine instance health
   health_check_type   = "ELB"
 
   min_size         = 3
@@ -310,25 +333,57 @@ resource "aws_autoscaling_group" "web_server_asg" {
   desired_capacity = 3
 
   launch_template {
+    # Use web server template to create identical instances
     id      = aws_launch_template.web_server.id
+    # Always use the latest version of the template
     version = "$Latest"
   }
 
   tag {
+    # Applies the "web-server" name tag to all launched instances
     key                 = "Name"
     value               = "web-server"
     propagate_at_launch = true
   }
 }
+/* How it works:
+ - ASG maintains 3 instances initially
+ - When CloudWatch alarms trigger, scaling policies adjust the desired capacity
+ - ASG automatically launches/terminates instances to match desired capacity
+ - New instances are automatically registered with the load balancer
+ - Unhealthy instances are terminated and replaced
+ - This provides automatic high availability and scalability for your web application.
+*/
 
+# Scaling policy that tells the Auto Scaling Group how to scale up when triggered.
 resource "aws_autoscaling_policy" "scale_up" {
   name                   = "scale-up"
   autoscaling_group_name = aws_autoscaling_group.web_server_asg.name
+  # Change the number of instances by a fixed amount (not percentage or exact number)
   adjustment_type        = "ChangeInCapacity"
+  # Number of instances to add when triggered
   scaling_adjustment     = 1
+  # Wait 60 seconds after scaling before allowing another scale-up action
   cooldown               = 60
 }
+/* How it works:
+ - CloudWatch alarm detects high CPU (>70% for 2 minutes)
+ - Alarm triggers this scale-up policy
+ - ASG increases desired capacity by 1 (e.g., 3 → 4 instances)
+ - ASG launches 1 new instance using the launch template
+ - 60-second cooldown prevents immediate additional scaling
+ - New instance registers with load balancer and starts receiving traffic
+ 
+Example scenario:
+ - Current: 3 instances
+ - High CPU alarm triggers → Policy adds 1 → Now 4 instances
+ - If CPU still high after cooldown → Policy adds 1 more → Now 5 instances
+ - Continues until max_size (6) is reached or CPU drops below threshold
 
+This provides gradual, controlled scaling rather than adding all instances at once.
+*/
+
+# scaling policy that tells the Auto Scaling Group how to scale down when triggered.
 resource "aws_autoscaling_policy" "scale_down" {
   name                   = "scale-down"
   autoscaling_group_name = aws_autoscaling_group.web_server_asg.name
@@ -336,26 +391,44 @@ resource "aws_autoscaling_policy" "scale_down" {
   scaling_adjustment     = -1
   cooldown               = 60
 }
+/* This reduces costs by removing unnecessary instances during low demand while
+ensuring you never go below the minimum of 3 instances. */
 
+
+/* CloudWatch alarm that monitors CPU usage and triggers the scale-up policy
+when CPU is too high. */
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name                = "web-server-high-cpu"
   alarm_description         = "This metric monitors for high ec2 cpu utilization"
-  comparison_operator       = "GreaterThanThreshold"
-  evaluation_periods        = 2
-  metric_name               = "CPUUtilization"
-  namespace                 = "AWS/EC2"
-  period                    = 60
-  statistic                 = "Average"
-  threshold                 = 70
+  comparison_operator       = "GreaterThanThreshold" # Triggers when CPU exceeds threshold
+  evaluation_periods        = 2 # Must exceed threshold for 2 consecutive periods (2 minutes total)
+  metric_name               = "CPUUtilization" # Monitors CPU percentage
+  namespace                 = "AWS/EC2" # Uses EC2 metrics from CloudWatch
+  period                    = 60 # Checks CPU every 60 seconds
+  statistic                 = "Average" # Calculates average CPU across all instances
+  threshold                 = 70 # Alarm triggers when average CPU > 70%
   insufficient_data_actions = []
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.web_server_asg.name
-  }
+  } # Monitors only instances in your specific ASG
 
+  # Executes the scale-up policy when alarm triggers
   alarm_actions = [aws_autoscaling_policy.scale_up.arn]
 }
+/* How it works:
+ - CloudWatch checks average CPU every 60 seconds
+ - If CPU > 70% for first period → waits
+ - If CPU > 70% for second consecutive period → alarm state changes to ALARM
+ - Alarm triggers scale-up policy
+ - ASG adds 1 instance
+ - Process repeats if CPU remains high
+The 2-period requirement prevents scaling from temporary CPU spikes, ensuring
+sustained high load before adding capacity.
+*/
 
+/* CloudWatch alarm that monitors CPU usage and triggers the scale-down policy
+when CPU is too low. */
 resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   alarm_name                = "web-server-low-cpu"
   alarm_description         = "This metric monitors for low ec2 cpu utilization"
@@ -374,3 +447,12 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 
   alarm_actions = [aws_autoscaling_policy.scale_down.arn]
 }
+/* How it works:
+ - CloudWatch checks average CPU every 60 seconds
+ - If CPU < 30% for first period → waits
+ - If CPU < 30% for second consecutive period → alarm state changes to ALARM
+ - Alarm triggers scale-down policy
+ - ASG removes 1 instance
+ - Process repeats if CPU remains low (until min_size of 3)
+This saves costs by removing excess capacity during low demand, while the 2-period requirement prevents scaling down from temporary CPU drops.
+*/
