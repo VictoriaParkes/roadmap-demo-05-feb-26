@@ -218,17 +218,22 @@ resource "aws_launch_template" "web_server" {
     systemctl enable nginx
     echo "<html><h1>Server $(hostname)</h1></html>" > /usr/share/nginx/html/index.html
 
-    # CPU cycling script for autoscaling demo
+    # Synchronized CPU cycling script
     cat > /usr/local/bin/cpu-cycle.sh << 'SCRIPT'
     #!/bin/bash
     while true; do
-      # High CPU for 3 minutes (trigger scale up)
+      # Wait until next 6-minute boundary (00, 06, 12, 18, etc.)
+      CURRENT_MIN=$(date +%M | sed 's/^0//')
+      WAIT_MIN=$((6 - CURRENT_MIN % 6))
+      WAIT_SEC=$((WAIT_MIN * 60 - $(date +%S)))
+      sleep $WAIT_SEC
+      
+      # High CPU for 3 minutes
       yes > /dev/null & yes > /dev/null & yes > /dev/null &
-      PIDS="$!"
       sleep 180
       killall yes
       
-      # Low CPU for 3 minutes (trigger scale down)
+      # Low CPU for 3 minutes
       sleep 180
     done
     SCRIPT
