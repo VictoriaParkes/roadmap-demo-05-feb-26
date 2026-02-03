@@ -438,7 +438,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   namespace                 = "AWS/EC2"
   period                    = 60
   statistic                 = "Average"
-  threshold                 = 30
+  threshold                 = 20
   insufficient_data_actions = []
 
   dimensions = {
