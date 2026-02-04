@@ -60,6 +60,8 @@ InstanceConfig.get_instance_id()
 # This single line essentially initializes entire web application.
 app = Flask(__name__)
 
+# This code makes the EC2 instance ID automatically available in all Jinja2
+# templates without passing it manually to each render_template call.
 @app.context_processor
 def inject_instance_id():
     return {'instance_id': InstanceConfig.get_instance_id()}
@@ -158,7 +160,7 @@ def catch_all(path):
 if __name__ == '__main__': # This is a Python idiom that checks if the script is being run directly (not imported as a module).
     if test_db_connection():
         # Starts the Flask development server
-        app.run(host='0.0.0.0', port=80, debug=True)
+        app.run(host='0.0.0.0', port=8080, debug=True)
     else:
         print(f"Failed to start app.")
         sys.exit(1)  # Tell Docker/system the app failed to start
