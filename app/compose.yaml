@@ -1,0 +1,53 @@
+services:
+  # create the app container
+  app:
+    # build container using Dockerfile in app/ dir
+    build: .
+    # map port container > host
+    ports:
+      - "5000:5000"
+    # set env variables inside container
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://bloguser:blogpass@db:5432/blogdb
+    # control start up order
+    depends_on:
+      db: # wait for db
+        condition: service_healthy # start after db passes health check
+    # mount local ./app folder to container /app dir, allow live code updates
+    volumes:
+      - .:/app
+  
+  # create the db container
+  db:
+    # use postgreSQL base image
+    image: postgres:15-alpine
+    # set up db
+    environment:
+      # create db named blogdb
+      POSTGRES_DB: blogdb
+      # create user named bloguser
+      POSTGRES_USER: bloguser
+      # set password
+      POSTGRES_PASSWORD: blogpass
+    # persist db data to volume defined below
+    # named-volume:path/inside/container/to/data/store
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # expose ports (container:host)
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # check is db accepts connections
+      test: ["CMD-SHELL", "pg_isready -U bloguser -d blogdb"]
+      # run check every 10 secs
+      interval: 10s
+      # fail if check takes more than 5 secs
+      timeout: 5s
+      # try 5 times before marking unhealthy
+      retries: 5
+
+# Create persistent storage for db data
+volumes:
+  postgres_data:

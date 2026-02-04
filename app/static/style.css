@@ -1,0 +1,17 @@
+#navigation {
+    line-height: 75px;
+    letter-spacing: 3px;
+}
+
+nav>ul {
+    text-align: center;
+}
+
+#navigation li {
+    font-size: 1.25rem;
+    display: inline-block;
+    list-style-type: none;
+    text-align: center;
+    height: 100%;
+    padding: 10px;
+}
