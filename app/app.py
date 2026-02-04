@@ -5,6 +5,39 @@ import cloudinary.uploader
 import sys
 # Access environment variables
 import os
+import requests
+
+class InstanceConfig:
+    """Configuration class to avoid global variable issues"""
+    _instance_id = None
+    
+    @classmethod
+    def get_instance_id(cls):
+        if cls._instance_id is None:
+            try:
+                # Use IMDSv2 for better security
+                token_response = requests.put(
+                    'http://169.254.169.254/latest/api/token',
+                    headers={'X-aws-ec2-metadata-token-ttl-seconds': '21600'},
+                    timeout=1
+                )
+                token_response.raise_for_status()
+                token = token_response.text
+                response = requests.get(
+                    'http://169.254.169.254/latest/meta-data/instance-id',
+                    headers={'X-aws-ec2-metadata-token': token},
+                    timeout=1
+                )
+                response.raise_for_status()
+                cls._instance_id = response.text
+            except requests.RequestException:
+                cls._instance_id = 'local-dev'
+        return cls._instance_id
+
+# Warm up the cache
+InstanceConfig.get_instance_id()
+
+
 
 # Create Flask web application instance
 # Flask(__name__)
@@ -26,6 +59,11 @@ import os
 
 # This single line essentially initializes entire web application.
 app = Flask(__name__)
+
+@app.context_processor
+def inject_instance_id():
+    return {'instance_id': InstanceConfig.get_instance_id()}
+
 
 # Configure database with fallback
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///site.db')
