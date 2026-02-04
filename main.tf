@@ -245,6 +245,7 @@ resource "aws_launch_template" "web_server" {
   user_data = base64encode(<<-EOF
     #!/bin/bash
     dnf update -y
+    dnf install -y jq
     dnf install -y docker
     systemctl start docker
     systemctl enable docker
@@ -252,9 +253,16 @@ resource "aws_launch_template" "web_server" {
     # Authenticate and pull from ECR
     aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${aws_ecr_repository.app.repository_url}
     docker pull ${aws_ecr_repository.app.repository_url}:latest
-
+    
+    SECRET=$(aws secretsmanager get-secret-value --secret-id ${aws_secretsmanager_secret.cloudinary.name} --region ${var.region} --query SecretString --output text)
+    
     # run container
-    docker run -d -p 80:80 --name web-server ${aws_ecr_repository.app.repository_url}:latest
+    docker run -d -p 80:8080 \
+      -e cloudinary_cloud_name=$(echo $SECRET | jq -r .cloud_name) \
+      -e cloudinary_api_key=$(echo $SECRET | jq -r .api_key) \
+      -e cloudinary_api_secret=$(echo $SECRET | jq -r .api_secret) \
+      --name web-server ${aws_ecr_repository.app.repository_url}:latest
+
 
 
     # To synchronize all instances, use time-based alignment so they all start their
@@ -315,10 +323,10 @@ resource "aws_lb_target_group" "alb_target_group" {
 
   health_check {
     enabled             = true
-    healthy_threshold   = 2     # Instance becomes healthy after 2 consecutive successful checks (60 seconds)
-    interval            = 30    # Checks every 30 seconds
-    matcher             = "200" # Expects HTTP 200 status code for healthy response
-    path                = "/"   # ALB sends HTTP GET requests to the root path
+    healthy_threshold   = 2         # Instance becomes healthy after 2 consecutive successful checks (60 seconds)
+    interval            = 30        # Checks every 30 seconds
+    matcher             = "200"     # Expects HTTP 200 status code for healthy response
+    path                = "/health" # ALB sends HTTP GET requests to the root path
     port                = "traffic-port"
     protocol            = "HTTP"
     timeout             = 5 # Waits 5 seconds for a response before considering it failed
@@ -558,4 +566,29 @@ resource "aws_ecr_lifecycle_policy" "app" {
 }
 EOF
 */
+}
+
+resource "aws_secretsmanager_secret" "cloudinary" {
+  name = "cloudinary-credentials"
+}
+
+resource "aws_secretsmanager_secret_version" "cloudinary" {
+  secret_id = aws_secretsmanager_secret.cloudinary.id
+  secret_string = jsonencode({
+    cloud_name = var.cloudinary_cloud_name
+    api_key    = var.cloudinary_api_key
+    api_secret = var.cloudinary_api_secret
+  })
+}
+
+resource "aws_iam_role_policy" "secrets_access" {
+  role = aws_iam_role.ec2_ecr_role.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = aws_secretsmanager_secret.cloudinary.arn
+    }]
+  })
 }
