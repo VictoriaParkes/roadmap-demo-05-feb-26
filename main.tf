@@ -1,4 +1,4 @@
-/*VPC module creates a complete network infrastructure
+/* VPC module creates a complete network infrastructure
 using a community Terraform module from the registry */
 module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
@@ -56,37 +56,6 @@ resource "aws_vpc_security_group_egress_rule" "preffix_egress_rule" {
   ip_protocol = "-1"
 }
 
-# Empty security group container to be attached to bastion host instance
-resource "aws_security_group" "bastion_sg" {
-  name        = "bastion-security-group"
-  description = "Allow SSH from prefix list"
-  vpc_id      = module.vpc.vpc_id
-
-  tags = {
-    Name = "bastion-security-group"
-  }
-}
-
-/* Security group ingress rule for bastion host security group
-allows inbound SSH traffic on port 22 from IPs in prefix list */
-resource "aws_vpc_security_group_ingress_rule" "bastion_ingress_rule" {
-  security_group_id = aws_security_group.bastion_sg.id
-
-  prefix_list_id = var.prefix_list_id
-  from_port      = 22
-  ip_protocol    = "tcp"
-  to_port        = 22
-}
-
-/* Security group egress rule for bastion host security group
-allows outbound traffic to any IP address */
-resource "aws_vpc_security_group_egress_rule" "bastion_egress_rule" {
-  security_group_id = aws_security_group.bastion_sg.id
-
-  cidr_ipv4   = "0.0.0.0/0"
-  ip_protocol = "-1"
-}
-
 # Empty security group container to be attached to web-server instances
 resource "aws_security_group" "instance_sg" {
   name        = "instance-security-group"
@@ -109,17 +78,6 @@ resource "aws_vpc_security_group_ingress_rule" "instance_ingress_rule" {
   to_port                      = 80
 }
 
-/* Security group ingress rule for instance security group
-allows inbound SSH traffic on port 22 from bastion host security group */
-resource "aws_vpc_security_group_ingress_rule" "instance_ingress_rule_ssh" {
-  security_group_id = aws_security_group.instance_sg.id
-
-  referenced_security_group_id = aws_security_group.bastion_sg.id
-  from_port                    = 22
-  ip_protocol                  = "tcp"
-  to_port                      = 22
-}
-
 /* Security group egress rule for instance security group
 allows outbound traffic to any IP address */
 resource "aws_vpc_security_group_egress_rule" "instance_egress_rule" {
@@ -128,75 +86,6 @@ resource "aws_vpc_security_group_egress_rule" "instance_egress_rule" {
   cidr_ipv4   = "0.0.0.0/0"
   ip_protocol = "-1"
 }
-
-/* RSA key of size 4096 bits
-This generates a new 4096-bit RSA key pair (public and private keys) during
-the Terraform plan and apply phases, storing the private key locally in the
-Terraform state file and the public key is used to create the AWS key pair.
-The private key is then written to a local file for use in 
-
-Terraform execution for SSH authentication to your EC2 instances. */
-# resource "tls_private_key" "rsa-4096-example" {
-#   algorithm = "RSA"
-#   rsa_bits  = 4096
-
-#   lifecycle {
-#     create_before_destroy = true
-#   }
-# }
-
-/* Key pair for SSH access to bastion host and web server instances.
-This registers the SSH public key with AWS EC2, making it available to
-attach to instances for authentication. It takes the public key from the
-Terraform-generated RSA key pair (created below) and uploads it to
-AWS with specified name, so both the bastion host and web servers can use
-it for SSH access. */
-# resource "aws_key_pair" "demo_key_pair" {
-#   key_name   = var.key_pair_name
-#   public_key = tls_private_key.rsa-4096-example.public_key_openssh
-# }
-
-/* This saves the private SSH key to a file locally at the path specified in
-var.file_name, so it can used to SSH into the bastion host and web servers for
-management and debugging purposes (e.g., ssh -i <file_name> ec2-user@<instance-ip>) */
-# resource "local_file" "demo_key" {
-#   content  = tls_private_key.rsa-4096-example.private_key_pem
-#   filename = var.file_name
-#   file_permission = "0400"
-# }
-
-# resource "aws_secretsmanager_secret" "ssh_private_key" {
-#   name        = "ssh-private-key"
-#   description = "SSH private key"
-# }
-
-# resource "aws_secretsmanager_secret_version" "ssh_private_key" {
-#   secret_id = aws_secretsmanager_secret.ssh_private_key.id
-#   secret_string = jsonencode({
-#     private_key = tls_private_key.rsa-4096-example.private_key_pem
-#     public_key  = tls_private_key.rsa-4096-example.public_key_openssh
-#     key_name    = aws_key_pair.demo_key_pair.key_name
-#   })
-# }
-
-/* Bastion host (jump box) - a single t3.micro EC2 instance in the first public
-subnet with public IP address, allowing SSH access into private web servers */
-# resource "aws_instance" "bastion" {
-#   ami                         = data.aws_ami.amazon_linux_2023.id
-#   instance_type               = "t3.micro"
-#   key_name                    = aws_key_pair.demo_key_pair.key_name
-#   subnet_id                   = module.vpc.public_subnets[0]
-#   vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
-#   associate_public_ip_address = true
-
-#   lifecycle {
-#     replace_triggered_by = [aws_key_pair.demo_key_pair]
-#   }
-
-#   tags = {
-#     Name = "bastion-host"
-#   }
-# }
 
 # IAM instance profile
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
