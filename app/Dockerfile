@@ -36,14 +36,14 @@ RUN mkdir -p instance && chown -R appuser:appuser instance
 # Switch to app user
 USER appuser
 
-# Documents that the app listens on port 5000
+# Documents that the app listens on port 8080
 # This is documentation only, doesn't actually publish the port
-# Still need -p 5000:5000 when running the container
-EXPOSE 5000
+# Still need -p 80:8080 when running the container
+EXPOSE 8080
 
 # Health check to monitor Flask application
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000', timeout=2)" || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080', timeout=2)" || exit 1
 
 # Execute
 # Runs when container starts
