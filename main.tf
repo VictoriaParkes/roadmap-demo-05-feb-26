@@ -242,6 +242,9 @@ resource "aws_launch_template" "web_server" {
 
   vpc_security_group_ids = [aws_security_group.instance_sg.id]
 
+  # The user data script runs when the instance starts and installs Docker,
+  # pulls the web app image from ECR, and runs it.
+  # The base64encode function encodes the script so it can be passed as a string
   user_data = base64encode(<<-EOF
     #!/bin/bash
     dnf update -y
@@ -262,7 +265,6 @@ resource "aws_launch_template" "web_server" {
       -e cloudinary_api_key=$(echo $SECRET | jq -r .api_key) \
       -e cloudinary_api_secret=$(echo $SECRET | jq -r .api_secret) \
       --name web-server ${aws_ecr_repository.app.repository_url}:latest
-
 
 
     # To synchronize all instances, use time-based alignment so they all start their
@@ -568,10 +570,13 @@ EOF
 */
 }
 
+# AWS Secrets Manager secret container to securely store sensitive data
 resource "aws_secretsmanager_secret" "cloudinary" {
   name = "cloudinary-credentials"
 }
 
+/* Store Cloudinary credentials in the secret, using JSON format for easy parsing
+by applications. These values are sourced from variables defined in terraform.tfvars */
 resource "aws_secretsmanager_secret_version" "cloudinary" {
   secret_id = aws_secretsmanager_secret.cloudinary.id
   secret_string = jsonencode({
@@ -581,6 +586,7 @@ resource "aws_secretsmanager_secret_version" "cloudinary" {
   })
 }
 
+/* IAM policy to grant EC2 instances permission to read the Cloudinary secrets from AWS Secrets Manager */
 resource "aws_iam_role_policy" "secrets_access" {
   role = aws_iam_role.ec2_ecr_role.name
   policy = jsonencode({
