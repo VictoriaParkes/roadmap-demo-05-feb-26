@@ -66,3 +66,20 @@ variable "file_name" {
   type        = string
   default     = "private_key.pem"
 }
+
+data "aws_caller_identity" "current-id" {}
+
+variable "cloudinary_cloud_name" {
+  type      = string
+  sensitive = true
+}
+
+variable "cloudinary_api_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "cloudinary_api_secret" {
+  type      = string
+  sensitive = true
+}

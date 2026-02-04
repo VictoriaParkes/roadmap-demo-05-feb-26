@@ -198,12 +198,44 @@ subnet with public IP address, allowing SSH access into private web servers */
 #   }
 # }
 
+# IAM instance profile
+resource "aws_iam_instance_profile" "ec2_instance_profile" {
+  name = "ec2-instance-profile"
+  role = aws_iam_role.ec2_ecr_role.name
+}
+
+# IAM role for EC2 to pull from ECR
+resource "aws_iam_role" "ec2_ecr_role" {
+  name = "ec2-ecr-access-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+}
+
+# IAM policy to allow ec2 to pull from ecr
+resource "aws_iam_role_policy_attachment" "ec2_ecr_pull" {
+  role       = aws_iam_role.ec2_ecr_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly"
+}
+
 /* Define template for launching web server instances, specifying ami, instance
 type, security group, SSH key and a start up script to install and configure
 nginx to serve a simple HTML page showing the server's hostname. The autoscaling
 group uses this template to create identical web servers on demand. */
 resource "aws_launch_template" "web_server" {
-  name_prefix   = "web-server-"
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_instance_profile.name
+  }
   image_id      = data.aws_ami.amazon_linux_2023.id
   instance_type = "t3.micro"
   # key_name      = aws_key_pair.demo_key_pair.key_name
@@ -213,10 +245,17 @@ resource "aws_launch_template" "web_server" {
   user_data = base64encode(<<-EOF
     #!/bin/bash
     dnf update -y
-    dnf install -y nginx
-    systemctl start nginx
-    systemctl enable nginx
-    echo "<html><h1>Server $(hostname)</h1></html>" > /usr/share/nginx/html/index.html
+    dnf install -y docker
+    systemctl start docker
+    systemctl enable docker
+
+    # Authenticate and pull from ECR
+    aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${aws_ecr_repository.app.repository_url}
+    docker pull ${aws_ecr_repository.app.repository_url}:latest
+
+    # run container
+    docker run -d -p 80:80 --name web-server ${aws_ecr_repository.app.repository_url}:latest
+
 
     # To synchronize all instances, use time-based alignment so they all start their
     # CPU cycles at the same clock time:
@@ -276,10 +315,10 @@ resource "aws_lb_target_group" "alb_target_group" {
 
   health_check {
     enabled             = true
-    healthy_threshold   = 2 # Instance becomes healthy after 2 consecutive successful checks (60 seconds)
-    interval            = 30 # Checks every 30 seconds
+    healthy_threshold   = 2     # Instance becomes healthy after 2 consecutive successful checks (60 seconds)
+    interval            = 30    # Checks every 30 seconds
     matcher             = "200" # Expects HTTP 200 status code for healthy response
-    path                = "/" # ALB sends HTTP GET requests to the root path
+    path                = "/"   # ALB sends HTTP GET requests to the root path
     port                = "traffic-port"
     protocol            = "HTTP"
     timeout             = 5 # Waits 5 seconds for a response before considering it failed
@@ -298,7 +337,7 @@ resource "aws_lb_target_group" "alb_target_group" {
 target group, which contains your web server instances. */
 resource "aws_lb_listener" "alb_listener" {
   load_balancer_arn = aws_lb.load_balancer.arn # Attaches this listener to your load balancer
-  port              = 80 # Listens for incoming HTTP traffic on port 80
+  port              = 80                       # Listens for incoming HTTP traffic on port 80
   protocol          = "HTTP"
 
   default_action {
@@ -320,13 +359,13 @@ and handles scaling based on CloudWatch alarms. */
 /* Auto Scaling Group (ASG) that automatically manages the number of EC2
 instances based on demand. */
 resource "aws_autoscaling_group" "web_server_asg" {
-  name                = "web-server-asg"
+  name = "web-server-asg"
   # Launch instances in private subnets across multiple availability zones
   vpc_zone_identifier = module.vpc.private_subnets
   #v Automatically register new instances with the load balancer's target group
-  target_group_arns   = [aws_lb_target_group.alb_target_group.arn]
+  target_group_arns = [aws_lb_target_group.alb_target_group.arn]
   # Use load balancer health checks (not just EC2 status checks) to determine instance health
-  health_check_type   = "ELB"
+  health_check_type = "ELB"
 
   min_size         = 3
   max_size         = 6
@@ -334,7 +373,7 @@ resource "aws_autoscaling_group" "web_server_asg" {
 
   launch_template {
     # Use web server template to create identical instances
-    id      = aws_launch_template.web_server.id
+    id = aws_launch_template.web_server.id
     # Always use the latest version of the template
     version = "$Latest"
   }
@@ -360,11 +399,11 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "scale-up"
   autoscaling_group_name = aws_autoscaling_group.web_server_asg.name
   # Change the number of instances by a fixed amount (not percentage or exact number)
-  adjustment_type        = "ChangeInCapacity"
+  adjustment_type = "ChangeInCapacity"
   # Number of instances to add when triggered
-  scaling_adjustment     = 1
+  scaling_adjustment = 1
   # Wait 60 seconds after scaling before allowing another scale-up action
-  cooldown               = 60
+  cooldown = 60
 }
 /* How it works:
  - CloudWatch alarm detects high CPU (>70% for 2 minutes)
@@ -401,12 +440,12 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name                = "web-server-high-cpu"
   alarm_description         = "This metric monitors for high ec2 cpu utilization"
   comparison_operator       = "GreaterThanThreshold" # Triggers when CPU exceeds threshold
-  evaluation_periods        = 1 # Must exceed threshold for x num consecutive periods
-  metric_name               = "CPUUtilization" # Monitors CPU percentage
-  namespace                 = "AWS/EC2" # Uses EC2 metrics from CloudWatch
-  period                    = 60 # Checks CPU every 60 seconds
-  statistic                 = "Average" # Calculates average CPU across all instances
-  threshold                 = 50 # Alarm triggers when average CPU > 50%
+  evaluation_periods        = 1                      # Must exceed threshold for x num consecutive periods
+  metric_name               = "CPUUtilization"       # Monitors CPU percentage
+  namespace                 = "AWS/EC2"              # Uses EC2 metrics from CloudWatch
+  period                    = 60                     # Checks CPU every 60 seconds
+  statistic                 = "Average"              # Calculates average CPU across all instances
+  threshold                 = 50                     # Alarm triggers when average CPU > 50%
   insufficient_data_actions = []
 
   dimensions = {
@@ -456,3 +495,67 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
  - Process repeats if CPU remains low (until min_size of 3)
 This saves costs by removing excess capacity during low demand, while the 2-period requirement prevents scaling down from temporary CPU drops.
 */
+
+/* Create an ECR repository to store Docker images for application */
+resource "aws_ecr_repository" "app" {
+  name                 = "roadmap-demo-app"
+  image_tag_mutability = "MUTABLE"
+  /* Allows image tags to be overwritten. For example,
+  you can push a new image with the same tag (like latest)
+  and it will replace the old one. Setting this to IMMUTABLE
+  would prevent tag overwrites, forcing unique tags for each
+  image. */
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+  /* Automatically scans images for security vulnerabilities (CVEs)
+  whenever a new image is pushed to the repository. AWS ECR will
+  check for known security issues in container image layers */
+
+  tags = {
+    Name = "roadmap-demo-app"
+  }
+}
+
+/* ECR lifecycle policy that automatically manages and cleans up old
+Docker images in your repository to save storage costs */
+resource "aws_ecr_lifecycle_policy" "app" {
+  repository = aws_ecr_repository.app.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1                     # Execution order (lower numbers run first if you have multiple rules)
+      description  = "Keep last 10 images" # Human-readable explanation of what the rule does
+      selection = {
+        tagStatus   = "any"                # Applies to all images, tagged or untagged
+        countType   = "imageCountMoreThan" # Triggers when the total image count exceeds a threshold
+        countNumber = 10                   # Keeps only the 10 most recent images
+      }
+      action = {
+        type = "expire" # Deletes images that exceed the limit
+      }
+    }]
+  })
+
+  /* ALTERNATIVE FORMAT
+  policy = <<EOF
+{
+  "rules": [
+  {
+    "rulePriority": 1,
+    "description": "Keep last 10 images",
+    "selection": {
+      "tagStatus": "any",
+      "countType": "imageCountMoreThan",
+      "countNumber": 10
+    },
+    "action": {
+      "type": "expire"
+    }
+  }
+  ]
+}
+EOF
+*/
+}

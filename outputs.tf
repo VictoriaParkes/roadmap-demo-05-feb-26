@@ -20,6 +20,10 @@ output "load_balancer_dns" {
   value       = "HTTP://${aws_lb.load_balancer.dns_name}"
 }
 
+output "ecr_repository_url" {
+  description = "ECR repository URL"
+  value       = aws_ecr_repository.app.repository_url
+}
 
 # output "ssh_command_template" {
 #   description = "SSH command template"
