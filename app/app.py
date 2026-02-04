@@ -120,7 +120,7 @@ def catch_all(path):
 if __name__ == '__main__': # This is a Python idiom that checks if the script is being run directly (not imported as a module).
     if test_db_connection():
         # Starts the Flask development server
-        app.run(host='0.0.0.0', debug=True)
+        app.run(host='0.0.0.0', port=80, debug=True)
     else:
         print(f"Failed to start app.")
         sys.exit(1)  # Tell Docker/system the app failed to start
