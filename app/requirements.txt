@@ -8,6 +8,7 @@ importlib_metadata==8.7.0
 itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.3
+requests==2.32.3
 six==1.17.0
 SQLAlchemy==2.0.44
 typing_extensions==4.15.0
