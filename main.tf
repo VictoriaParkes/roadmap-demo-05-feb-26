@@ -15,7 +15,7 @@ module "vpc" {
   # Enable private subnets to access the internet for updates/downloads
   enable_nat_gateway = true
   # Provision a virtual private gateway for VPN connections
-  enable_vpn_gateway = true
+  enable_vpn_gateway = false
 
   tags = {
     Terraform   = "true"
