@@ -8,12 +8,19 @@
 
     IAM → Users → Security credentials → Create access key
 
-2. Configure with short-lived credentials:
+2. Create role:\
+    Trusted entity type = AWS account\
+    An AWS account = This account\
+    Add permission policies\
+        - admin\
+    Name = terraform-execution
+
+3. Configure with short-lived credentials:
 
     `aws configure`\
     `# Enter your keys`
 
-3. Use STS 
+4. Use STS 
 
     1. to get temporary credentials (15 min - 12 hours):
 
@@ -49,7 +56,7 @@
 
 
 
-4. Check caller identity to verify user is used:
+5. Check caller identity to verify user is used:
 
     `aws sts get-caller-identity`
 
@@ -59,7 +66,7 @@
     `"Account": "<aws_account_id>",`\
     `"Arn": "arn:aws:sts::<aws_account_id>:assumed-role/<role_name>/botocore-session-1770646657"`
 
-5. Store long-lived keys securely:
+6. Store long-lived keys securely:
 
     `chmod 600 ~/.aws/credentials`
 
