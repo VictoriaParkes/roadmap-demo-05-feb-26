@@ -14,6 +14,10 @@ terraform {
 
 provider "aws" {
   region = var.region
+  assume_role {
+    role_arn     = "arn:aws:iam::${var.account_id}:role/terraform-execution"
+    session_name = "terraform-session-example"
+  }
 }
 
 # provider "tls" {
