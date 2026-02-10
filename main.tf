@@ -487,3 +487,20 @@ resource "aws_iam_role_policy" "secrets_access" {
     }]
   })
 }
+
+
+############
+# DynamoDB #
+############
+
+resource "aws_dynamodb_table" "blog_dynamodb_table" {
+  name = "BlogData"
+  billing_mode = "PAY_PER_REQUEST"
+
+  hash_key = "PostId"
+
+  attribute {
+    name = "PostId"
+    type = "N"
+  }
+}
