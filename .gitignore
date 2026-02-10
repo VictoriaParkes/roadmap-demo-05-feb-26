@@ -1,3 +1,4 @@
+.venv
 # Python environment configuration file that may contain sensitive settings
 env.py
 # Environment variables file containing secrets like API keys and passwords
