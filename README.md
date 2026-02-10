@@ -78,3 +78,26 @@
 
 ### Terraform
 - Check for running Terraform processes: `ps aux | grep terraform`
+
+---
+To find your ~/.aws/config file, look in your user's home directory. The exact path depends on your operating system: 
+1. Standard File Paths
+Linux, macOS, or Unix: /Users/USERNAME/.aws/config (often abbreviated as ~/.aws/config).
+Windows: C:\Users\USERNAME\.aws\config (accessible via the %USERPROFILE%\.aws\config environment variable). 
+
+2. Quick Terminal Commands 
+If you want to view or verify the file location quickly, use these commands:
+View file contents:
+Mac/Linux: cat ~/.aws/config.
+Windows (Command Prompt): type %USERPROFILE%\.aws\config.
+Identify active config: Run aws configure list to see exactly which file the AWS CLI is currently using for your settings. 
+
+3. Hidden Folder Tips
+Dotfiles: The .aws folder is a "hidden" directory because it starts with a period.
+On macOS: In Finder, press Cmd + Shift + . to reveal hidden files.
+On Windows: Ensure "Hidden items" is checked in the View tab of File Explorer. 
+
+4. Custom Locations
+If the file isn't in the default spot, check if the AWS_CONFIG_FILE environment variable has been set to a different path. 
+
+Note: If the file does not exist yet, you can create it automatically by running the aws configure command in your terminal. 
