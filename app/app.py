@@ -1,7 +1,9 @@
 from flask import Flask, render_template, request, redirect # web framework
-from models import db, Post  # Import from db and data model from models.py
 import cloudinary # image hosting
-import cloudinary.uploader 
+import cloudinary.uploader
+import boto3
+from datetime import datetime
+from decimal import Decimal
 import sys
 # Access environment variables
 import os
@@ -67,13 +69,15 @@ def inject_instance_id():
     return {'instance_id': InstanceConfig.get_instance_id()}
 
 
-# Configure database with fallback
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///site.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-  # Avoids a warning
+# Initialize DynamoDB
+dynamodb = boto3.resource('dynamodb', region_name='eu-west-2')  # Match your region
+table = dynamodb.Table('BlogData')
 
-# Initialize db with app
-db.init_app(app)
+# Helper to convert float to Decimal for DynamoDB
+def float_to_decimal(obj):
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    return obj
 
 # Configure cloud storage for images using environment variables       
 cloudinary.config( 
@@ -83,131 +87,156 @@ cloudinary.config(
     secure=True
 )
 
-# handler for the root URL path "/", only accepts HTTP GET requests
-# Displays all posts (READ operation)
 @app.route("/", methods=['GET'])
 def index():
-    print("index route called")
     try:
-        print("Started index")
-        # query database to retrieve all records from 'Post' model/table
-        # stores the results in the 'posts' variable
-        posts = Post.query.all()
-        print(f"✓ Retrieved {len(posts)} posts")
-        # render 'index.html' template and pass it 'posts' variable
-        # template can then loop through and display
+        response = table.scan()
+        posts = response.get('Items', [])
+        # Sort by PostId descending (newest first)
+        posts.sort(key=lambda x: x.get('PostId', 0), reverse=True)
         return render_template("index.html", posts=posts)
     except Exception as e:
-        print(f"✗ Error in index route: {e}")
+        print(f"✗ Error: {e}")
         return f"Database error: {e}", 500
 
-# Handles /create URL for both GET (display form) and POST (process form) requests
 @app.route("/create", methods=['GET', 'POST'])
 def create():
-    # Extracts form data when submitted
     if request.method == 'POST':
         try:
+            # Generate unique PostId (use timestamp or get max+1)
+            response = table.scan(ProjectionExpression='PostId')
+            existing_ids = [item['PostId'] for item in response.get('Items', [])]
+            post_id = max(existing_ids, default=0) + 1
+            
             title = request.form['title']
             content = request.form['content']
             
-            # check if image was uploaded
-            # if yes upload to cloudinary and get secure URL
-            # if no image URL remains None
             image_url = None
             if 'image' in request.files and request.files['image'].filename:
                 image = request.files['image']
                 upload_result = cloudinary.uploader.upload(image)
                 image_url = upload_result['secure_url']
-            # Creates new Post object with form data.
-            # Adds it to the database session.
-            # Commits the transaction to save
-            new_post = Post(title=title, content=content, image=image_url)
-            db.session.add(new_post)
-            db.session.commit()
+            
+            # Store in DynamoDB
+            table.put_item(Item={
+                'PostId': post_id,
+                'title': title,
+                'content': content,
+                'image': image_url or '',
+                'date': datetime.now().isoformat()
+            })
+            
             print(f"✓ Created post: {title}")
             return redirect('/')
         except Exception as e:
-            print(f"✗ Error creating post: {e}")
+            print(f"✗ Error: {e}")
             return render_template("create.html", error=str(e))
-        
+    
     return render_template("create.html")
 
-# Test database connection on startup
-def test_db_connection():
-    try:
-        with app.app_context():
-            db.create_all()
-            print("Database connected successfully")
-            return True
-    except Exception as e:
-        print(f"Database connection failed: {e}")
-        sys.exit(1)
 
 @app.route("/health")
 def health():
-    return {"status": "healthy", "database": "connected"}, 200
+    try:
+        table.table_status
+        return {"status": "healthy", "database": "connected"}, 200
+    except:
+        return {"status": "unhealthy"}, 500
 
-@app.route("/test")
-def test():
-    return "<h1>Flask is working!</h1>"
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=True)
 
-@app.route('/<path:path>')
-def catch_all(path):
-    print(f"Catch-all route called with path: {path}")
-    return f"You requested: {path}"
-
-# Run the app and create database
-if __name__ == '__main__': # This is a Python idiom that checks if the script is being run directly (not imported as a module).
-    if test_db_connection():
-        # Starts the Flask development server
-        app.run(host='0.0.0.0', port=8080, debug=True)
-    else:
-        print(f"Failed to start app.")
-        sys.exit(1)  # Tell Docker/system the app failed to start
 
 """
-__name__ is a built-in Python variable
-When you run python app.py directly, __name__ equals '__main__'
-When another file imports this module, __name__ equals the module name ('app')
-Why it's useful:
-Direct execution: Code inside runs when you execute python app.py
-Import safety: Code inside doesn't run when another file does import app
-This ensures the Flask server only starts when you run the file directly, not when it's imported elsewhere.
-Example scenarios:
-python app.py → Server starts
-from app import Post in another file → Server doesn't start, but you can use the Post model
-This is the standard pattern for making Python scripts both executable and importable.
-"""
+This Flask application is a blog platform that uses DynamoDB for data storage, Cloudinary for image hosting, and runs on EC2 instances. Here's how it works:
 
-"""
-app.run(host='0.0.0.0', port=5000, debug=False)
-- This line configures how the Flask application starts and accepts connections.
+Key Components:
 
-Parameters Breakdown
+1. InstanceConfig Class (Lines 12-39)
 
-host='0.0.0.0':
-Binds to all network interfaces (not just localhost)
-Critical for Docker: Allows external connections to reach the container
-Default is 127.0.0.1 which only accepts local connections
-Without this: The containerized app would be unreachable
+- Retrieves the EC2 instance ID using AWS Instance Metadata Service v2 (IMDSv2)
 
-port=5000:
-Listens on port 5000 inside the container
-Must match the Dockerfile's EXPOSE 5000
-Standard Flask port (default is also 5000)
+- Caches the ID to avoid repeated API calls
 
-debug=False:
-Production mode: Disables debug features
-Security: Prevents exposing sensitive error information
-Performance: Removes debug overhead
-Default is False but explicitly setting it is good practice
+- Falls back to 'local-dev' if not running on EC2
 
-Why This Matters for Docker:
-app.run(debug=True) - Only accepts localhost connections, won't work in Docker
-app.run(host='0.0.0.0', port=5000, debug=False) - Accepts external connections, works in Docker.
+- Used to display which instance is serving each request (helpful for load balancer testing)
 
-Container networking: Docker creates an isolated network, so 127.0.0.1 inside the container is different
-from the host machine. Using 0.0.0.0 makes the app accessible from outside the container.
 
-This configuration is essential for a containerized Flask app to work properly.
+2. DynamoDB Setup (Lines 73-74)
+```
+dynamodb = boto3.resource('dynamodb', region_name='eu-west-2')
+table = dynamodb.Table('BlogData')
+```
+
+- Connects to your DynamoDB table in eu-west-2 region
+
+- Uses IAM role credentials automatically (no hardcoded keys needed)
+
+3. Cloudinary Configuration (Lines 82-87)
+
+- Loads image hosting credentials from environment variables
+
+- Enables secure HTTPS uploads
+
+Routes:
+/ (index) - Display all posts:
+
+- Scans entire DynamoDB table
+
+- Sorts posts by PostId (newest first)
+
+- Returns all blog posts to the template
+
+
+
+
+
+Issue: table.scan() reads the entire table, which is inefficient and expensive for large datasets. Consider pagination or using Query with a sort key.
+
+
+
+/create - Create new post:
+
+1. Scans table to find highest PostId
+
+2. Generates new PostId = max + 1
+
+3. Uploads image to Cloudinary (if provided)
+
+4. Stores post in DynamoDB with: PostId, title, content, image URL, date
+
+5. Redirects to homepage
+
+
+
+
+Issue: The PostId generation has a race condition - if two requests happen simultaneously, they could generate the same ID. Consider using a UUID or atomic counter instead.
+
+
+
+/health - Health check:
+
+- Verifies DynamoDB connection by checking table status
+
+- Used by load balancers to determine instance health
+
+
+How Data Flows:
+1. User submits form → Flask receives POST request
+
+2. Image uploaded → Cloudinary returns URL
+
+3. Data + image URL → Stored in DynamoDB
+
+4. User redirected → Homepage scans DynamoDB → Displays all posts
+
+Critical Dependencies:
+- EC2 IAM role must have DynamoDB permissions (PutItem, Scan, GetItem)
+
+- Environment variables must contain Cloudinary credentials
+
+- DynamoDB table "BlogData" must exist in eu-west-2
+
+The app runs on port 8080 and accepts connections from any network interface (required for Docker/EC2).
 """
