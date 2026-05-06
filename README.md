@@ -15,6 +15,8 @@ A **containerized blog platform** built with Flask (Python), deployed on AWS in 
 | Load Balancer	| Internet-facing ALB on port 80, health checks on `/health` |
 | Monitoring | CloudWatch alarms on average CPU utilization |
 
+![high-level-infra](docs/drawio_png/infrastructure-high-level.drawio.png)
+
 ## Networking
 
 - **Public subnets** (`10.0.4.0/24`, `10.0.5.0/24`, `10.0.6.0/24`) - host the ALB and NAT Gateway
@@ -30,6 +32,8 @@ A **containerized blog platform** built with Flask (Python), deployed on AWS in 
     - Instance SG: ingress TCP 80 from ALB SG only, egress all
 
 - This means EC2 instances are **never directly accessible** from the internet — all traffic must pass through the ALB
+
+![networking](docs/drawio_png/infrastructure-network.drawio.drawio.png)
 
 ## Data Flow
 
@@ -49,6 +53,8 @@ A **containerized blog platform** built with Flask (Python), deployed on AWS in 
 
 3. **Health checks**: ALB sends `GET /health` every 30s → Flask checks DynamoDB table status → returns 200 or 500
 
+![data-flow](docs/drawio_png/infrastructure-dataflow.drawio.drawio.png)
+
 ## Autoscaling
 
 - **Auto Scaling Group**: min 3, max 6, desired 3 instances spread across 3 AZs
@@ -61,6 +67,7 @@ A **containerized blog platform** built with Flask (Python), deployed on AWS in 
 
 - **Demo CPU cycling script**: baked into user data to simulate load — 3 minutes high CPU / 3 minutes low CPU, synchronized across instances to demonstrate scaling in action
 
+![autoscaling](docs/drawio_png/infrastructure-autoscaling.drawio.drawio.png)
 
 ## Deployment Flow
 
