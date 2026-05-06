@@ -1,0 +1,70 @@
+<mxfile host="65bd71144e">
+    <diagram name="Application Data Flow" id="dataflow">
+        <mxGraphModel dx="146" dy="282" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="900" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Application Data Flow — Blog Platform" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=16;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="20" width="500" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="user" value="User&#xa;Browser" style="shape=mxgraph.aws4.users;sketch=0;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="380" width="50" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="alb" value="ALB&#xa;:80" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.application_load_balancer;" parent="1" vertex="1">
+                    <mxGeometry x="250" y="385" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="flask" value="Flask App&#xa;(Docker Container)&#xa;Port 8080" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;fontSize=11;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="420" y="360" width="160" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="ddb" value="DynamoDB&#xa;BlogData&#xa;(PostId, title,&#xa;content, image, date)" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#C925D1;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="200" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="cloudinary" value="Cloudinary&#xa;Image CDN" style="shape=cloud;whiteSpace=wrap;html=1;fontSize=11;fontStyle=1;fillColor=#FFF3E0;strokeColor=#FF9800;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="500" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="ecr" value="ECR&#xa;roadmap-demo-app" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#ED7100;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.ecr;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="600" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="sm" value="Secrets Manager&#xa;Cloudinary Creds" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#DD344C;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.secrets_manager;" parent="1" vertex="1">
+                    <mxGeometry x="250" y="600" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow1" value="GET / — View Posts" style="text;html=1;strokeColor=none;fillColor=#E8F5E9;align=center;fontSize=10;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="80" width="150" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow1_desc" value="1. User requests page&#xa;2. ALB forwards to EC2&#xa;3. Flask scans DynamoDB&#xa;4. Returns rendered HTML" style="text;html=1;strokeColor=#4CAF50;fillColor=#E8F5E9;align=left;fontSize=10;rounded=1;spacingLeft=5;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="110" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow2" value="POST /create — New Post" style="text;html=1;strokeColor=none;fillColor=#E3F2FD;align=center;fontSize=10;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="200" width="160" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow2_desc" value="1. User submits form&#xa;2. Image → Cloudinary&#xa;3. Post data → DynamoDB&#xa;4. Redirect to homepage" style="text;html=1;strokeColor=#1565C0;fillColor=#E3F2FD;align=left;fontSize=10;rounded=1;spacingLeft=5;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="230" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow3" value="GET /health — Health Check" style="text;html=1;strokeColor=none;fillColor=#FFF3E0;align=center;fontSize=10;fontStyle=1;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="80" width="180" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow3_desc" value="1. ALB checks /health&#xa;2. Flask verifies DynamoDB&#xa;3. Returns 200 or 500" style="text;html=1;strokeColor=#FF9800;fillColor=#FFF3E0;align=left;fontSize=10;rounded=1;spacingLeft=5;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="110" width="180" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="c1" value="HTTP" style="edgeStyle=orthogonalEdgeStyle;fontSize=10;" parent="1" source="user" target="alb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c2" value="Forward :80" style="edgeStyle=orthogonalEdgeStyle;fontSize=10;" parent="1" source="alb" target="flask" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c3" value="scan() / put_item()" style="edgeStyle=orthogonalEdgeStyle;fontSize=10;strokeColor=#C925D1;" parent="1" source="flask" target="ddb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c4" value="Upload images" style="edgeStyle=orthogonalEdgeStyle;fontSize=10;strokeColor=#FF9800;" parent="1" source="flask" target="cloudinary" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c5" value="Pull image&#xa;(on boot)" style="edgeStyle=orthogonalEdgeStyle;fontSize=10;dashed=1;strokeColor=#ED7100;" parent="1" source="flask" target="ecr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c6" value="Get credentials&#xa;(on boot)" style="edgeStyle=orthogonalEdgeStyle;fontSize=10;dashed=1;strokeColor=#DD344C;" parent="1" source="flask" target="sm" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
