@@ -1,5 +1,76 @@
 # roadmap-demo-05-feb-26
 
+## Application Overview
+A **containerized blog platform** built with Flask (Python), deployed on AWS in the `eu-west-2` region. Users can create blog posts with images and view them. The app uses DynamoDB for data persistence and Cloudinary for image hosting.
+
+## Infrastructure
+
+| Component | Details |
+|    ---    | ------- |
+| VPC       | `demo-vpc` - CIDR `10.0.0.0/16`, spanning 3 AZs (eu-west-2a/b/c) |
+| Compute   | EC2 `t3.micro` instances running Amazon Linux 2023 with Docker |
+| Container Registry | ECR repo `roadmap-demo-app` - scan on push, keeps last 10 images |
+| Database | DynamoDB table `BlogData` - PAY_PER_REQUEST, partition key `PostI`d` (Number) |
+| Secrets	| AWS Secrets Manager stores Cloudinary credentials |
+| Load Balancer	| Internet-facing ALB on port 80, health checks on `/health` |
+| Monitoring | CloudWatch alarms on average CPU utilization |
+
+## Networking
+
+- **Public subnets** (`10.0.4.0/24`, `10.0.5.0/24`, `10.0.6.0/24`) - host the ALB and NAT Gateway
+
+- **Private subnets** (`10.0.1.0/24`, `10.0.2.0/24`, `10.0.3.0/24`) — host EC2 instances (no direct internet access)
+
+- **NAT Gateway** — allows private instances to reach the internet (pull ECR images, access Cloudinary/DynamoDB)
+
+- **Security groups**:
+
+    - ALB SG: ingress TCP 80 from a prefix list, egress all
+
+    - Instance SG: ingress TCP 80 from ALB SG only, egress all
+
+- This means EC2 instances are **never directly accessible** from the internet — all traffic must pass through the ALB
+
+## Data Flow
+
+1. **Viewing posts (GET /)**: User → ALB → EC2 → DynamoDB `table.scan()` → sorted posts rendered as HTML → returned to user
+
+2. Creating posts (POST /create):
+
+    - User submits form with title, content, optional image
+
+    - ALB forwards to an EC2 instance
+
+    - Image uploaded to Cloudinary → returns secure URL
+
+    - Post stored in DynamoDB (`PostId`, `title`, `content`, `image` URL, `date`)
+
+    - User redirected to homepage
+
+3. **Health checks**: ALB sends `GET /health` every 30s → Flask checks DynamoDB table status → returns 200 or 500
+
+## Autoscaling
+
+- **Auto Scaling Group**: min 3, max 6, desired 3 instances spread across 3 AZs
+
+- **Scale up**: CloudWatch alarm triggers when average CPU > 50% for 1 × 60s period → adds 1 instance, 60s cooldown
+
+- **Scale down**: CloudWatch alarm triggers when average CPU < 20% for 1 × 60s period → removes 1 instance, 60s cooldown
+
+- **Health check type**: ELB — if the ALB marks an instance unhealthy (2 consecutive failed checks), the ASG terminates and replaces it
+
+- **Demo CPU cycling script**: baked into user data to simulate load — 3 minutes high CPU / 3 minutes low CPU, synchronized across instances to demonstrate scaling in action
+
+
+## Deployment Flow
+
+1. Docker image built locally (`docker buildx build --platform linux/amd64`)
+
+2. Pushed to ECR
+
+3. On instance boot (user data script): install Docker → authenticate to ECR → pull latest image → fetch Cloudinary secrets from Secrets Manager → run container mapping port 80→8080
+
+4. IAM role (`ec2-ecr-access-role`) grants instances permission to pull from ECR and read from Secrets Manager
 
 ## Best Practice Setup:
 ### use new terminal each refresh
